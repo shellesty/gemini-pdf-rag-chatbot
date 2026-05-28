@@ -22,14 +22,26 @@ embedding_model = SentenceTransformer(
 
 # Streamlit page config
 st.set_page_config(
-    page_title="PDF RAG Chatbot",
+    page_title="Conversational PDF RAG Chatbot",
     page_icon="📄"
 )
 
 # App title
-st.title("📄 PDF RAG Chatbot")
+st.title("📄 Conversational PDF RAG Chatbot")
 
-st.write("Upload a PDF and ask questions about it.")
+st.write("Upload a PDF and chat with it.")
+
+# Initialize chat history
+if "messages" not in st.session_state:
+
+    st.session_state.messages = []
+
+# Display previous messages
+for message in st.session_state.messages:
+
+    with st.chat_message(message["role"]):
+
+        st.markdown(message["content"])
 
 # Upload PDF
 uploaded_file = st.file_uploader(
@@ -107,19 +119,32 @@ if uploaded_file:
 
     st.write(f"Total vectors stored: {index.ntotal}")
 
-    # User question input
-    user_question = st.text_input(
+    # User chat input
+    user_question = st.chat_input(
         "Ask a question about the PDF"
     )
 
     if user_question:
 
-        # Convert question into embedding
+        # Store user message
+        st.session_state.messages.append(
+            {
+                "role": "user",
+                "content": user_question
+            }
+        )
+
+        # Display user message
+        with st.chat_message("user"):
+
+            st.markdown(user_question)
+
+        # Convert user question into embedding
         question_embedding = embedding_model.encode(
             [user_question]
         )
 
-        # Convert question embedding to numpy array
+        # Convert to numpy array
         question_embedding = np.array(question_embedding)
 
         # Search FAISS index
@@ -146,17 +171,33 @@ if uploaded_file:
 
             st.write("------")
 
-        # Combine retrieved chunks into context
+        # Combine retrieved chunks
         context = "\n\n".join(retrieved_chunks)
+
+        # Build conversation history
+        conversation_history = ""
+
+        for message in st.session_state.messages:
+
+            role = message["role"]
+
+            content = message["content"]
+
+            conversation_history += f"{role}: {content}\n"
 
         # Create prompt
         prompt = f"""
-        Answer the question based ONLY on the provided context.
+        You are a helpful AI assistant.
+
+        Answer the question based ONLY on the provided context and conversation history.
 
         Context:
         {context}
 
-        Question:
+        Conversation History:
+        {conversation_history}
+
+        Current Question:
         {user_question}
         """
 
@@ -168,10 +209,18 @@ if uploaded_file:
                 contents=prompt
             )
 
-            # Display final answer
-            st.subheader("RAG Answer")
+            # Display assistant response
+            with st.chat_message("assistant"):
 
-            st.write(response.text)
+                st.markdown(response.text)
+
+            # Store assistant response
+            st.session_state.messages.append(
+                {
+                    "role": "assistant",
+                    "content": response.text
+                }
+            )
 
         except Exception as e:
 
