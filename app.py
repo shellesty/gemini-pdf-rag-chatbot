@@ -201,24 +201,35 @@ if uploaded_file:
         {user_question}
         """
 
-        # Generate Gemini response
+        # Generate Gemini streaming response
         try:
 
-            response = client.models.generate_content(
-                model="gemini-3-flash-preview",
-                contents=prompt
-            )
-
-            # Display assistant response
+            # Create assistant chat container
             with st.chat_message("assistant"):
 
-                st.markdown(response.text)
+                response_placeholder = st.empty()
+
+                full_response = ""
+
+                # Stream response
+                response_stream = client.models.generate_content_stream(
+                    model="gemini-3-flash-preview",
+                    contents=prompt
+                )
+
+                for chunk in response_stream:
+
+                    if chunk.text:
+
+                        full_response += chunk.text
+
+                        response_placeholder.markdown(full_response)
 
             # Store assistant response
             st.session_state.messages.append(
                 {
                     "role": "assistant",
-                    "content": response.text
+                    "content": full_response
                 }
             )
 
