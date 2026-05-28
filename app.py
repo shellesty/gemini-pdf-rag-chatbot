@@ -22,14 +22,14 @@ embedding_model = SentenceTransformer(
 
 # Streamlit page config
 st.set_page_config(
-    page_title="Conversational PDF RAG Chatbot",
-    page_icon="📄"
+    page_title="Multi-PDF Conversational RAG Chatbot",
+    page_icon="📚"
 )
 
 # App title
-st.title("📄 Conversational PDF RAG Chatbot")
+st.title("📚 Multi-PDF Conversational RAG Chatbot")
 
-st.write("Upload a PDF and chat with it.")
+st.write("Upload multiple PDFs and chat with them.")
 
 # Initialize chat history
 if "messages" not in st.session_state:
@@ -43,47 +43,80 @@ for message in st.session_state.messages:
 
         st.markdown(message["content"])
 
-# Upload PDF
-uploaded_file = st.file_uploader(
-    "Upload a PDF",
-    type="pdf"
+# Chunking function
+def chunk_text(text, chunk_size=500):
+
+    chunks = []
+
+    for i in range(0, len(text), chunk_size):
+
+        chunk = text[i:i + chunk_size]
+
+        chunks.append(
+            {
+                "text": chunk
+            }
+        )
+
+    return chunks
+
+# Upload multiple PDFs
+uploaded_files = st.file_uploader(
+    "Upload PDF files",
+    type="pdf",
+    accept_multiple_files=True
 )
 
-if uploaded_file:
+if uploaded_files:
 
-    # Read PDF
-    pdf_reader = PdfReader(uploaded_file)
-
+    # Store all extracted text
     extracted_text = ""
 
-    # Extract text from each page
-    for page in pdf_reader.pages:
+    # Store chunks with metadata
+    document_chunks = []
 
-        text = page.extract_text()
+    # Process each uploaded PDF
+    for uploaded_file in uploaded_files:
 
-        if text:
-            extracted_text += text
+        pdf_reader = PdfReader(uploaded_file)
+
+        pdf_text = ""
+
+        # Extract text from pages
+        for page in pdf_reader.pages:
+
+            text = page.extract_text()
+
+            if text:
+
+                pdf_text += text
+
+        # Create chunks for this document
+        pdf_chunks = chunk_text(pdf_text)
+
+        # Add source metadata
+        for chunk in pdf_chunks:
+
+            document_chunks.append(
+                {
+                    "source": uploaded_file.name,
+                    "text": chunk["text"]
+                }
+            )
+
+        # Add separator between PDFs
+        extracted_text += pdf_text + "\n\n"
 
     # Display extracted text preview
     st.subheader("Extracted Text Preview")
 
     st.write(extracted_text[:3000])
 
-    # Chunking function
-    def chunk_text(text, chunk_size=500):
-
-        chunks = []
-
-        for i in range(0, len(text), chunk_size):
-
-            chunk = text[i:i + chunk_size]
-
-            chunks.append(chunk)
-
-        return chunks
-
-    # Create chunks
-    text_chunks = chunk_text(extracted_text)
+    # Extract chunk texts
+    text_chunks = [
+        chunk["text"]
+        for chunk in document_chunks
+    ]
 
     # Display chunk information
     st.subheader("Text Chunks")
@@ -121,7 +154,7 @@ if uploaded_file:
 
     # User chat input
     user_question = st.chat_input(
-        "Ask a question about the PDF"
+        "Ask a question about the PDFs"
     )
 
     if user_question:
@@ -139,7 +172,7 @@ if uploaded_file:
 
             st.markdown(user_question)
 
-        # Convert user question into embedding
+        # Convert question into embedding
         question_embedding = embedding_model.encode(
             [user_question]
         )
@@ -159,15 +192,21 @@ if uploaded_file:
         for idx in indices[0]:
 
             retrieved_chunks.append(
-                text_chunks[idx]
+                document_chunks[idx]["text"]
             )
 
         # Display retrieved chunks
         st.subheader("Retrieved Chunks")
 
-        for chunk in retrieved_chunks:
+        for idx in indices[0]:
 
-            st.write(chunk)
+            st.write(
+                f"📄 Source: {document_chunks[idx]['source']}"
+            )
+
+            st.write(
+                document_chunks[idx]["text"]
+            )
 
             st.write("------")
 
